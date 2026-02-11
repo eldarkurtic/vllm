@@ -313,34 +313,35 @@ def test_per_head_quant_scales_backend_selection(
     vllm_config = VllmConfig(attention_config=attention_config)
 
     # Get the backend class to patch
+    prefix = "vllm.v1.attention.backends"
     backend_module = {
-        "FLASH_ATTN": "vllm.v1.attention.backends.flash_attn.FlashAttentionBackend",
-        "FLASHINFER": "vllm.v1.attention.backends.flashinfer.FlashInferBackend",
-        "FLEX_ATTENTION": "vllm.v1.attention.backends.flex_attention.FlexAttentionBackend",
+        "FLASH_ATTN": f"{prefix}.flash_attn.FlashAttentionBackend",
+        "FLASHINFER": f"{prefix}.flashinfer.FlashInferBackend",
+        "FLEX_ATTENTION": f"{prefix}.flex_attention.FlexAttentionBackend",
     }[backend_name]
 
-    with set_current_vllm_config(vllm_config):
-        with patch("vllm.platforms.current_platform", CudaPlatform()):
-            with patch(
-                f"{backend_module}.supports_per_head_quant_scales",
-                return_value=supports_per_head,
-            ):
-                if should_succeed:
-                    backend = get_attn_backend(
-                        head_size=128,
-                        dtype=torch.float16,
-                        kv_cache_dtype="fp8",
-                        block_size=64,
-                        use_per_head_quant_scales=True,
-                    )
-                    assert backend.get_name() == backend_name
-                else:
-                    with pytest.raises(ValueError) as exc_info:
-                        get_attn_backend(
-                            head_size=128,
-                            dtype=torch.float16,
-                            kv_cache_dtype="fp8",
-                            block_size=64,
-                            use_per_head_quant_scales=True,
-                        )
-                    assert backend_name in str(exc_info.value)
+    supports_attr = f"{backend_module}.supports_per_head_quant_scales"
+    with (
+        set_current_vllm_config(vllm_config),
+        patch("vllm.platforms.current_platform", CudaPlatform()),
+        patch(supports_attr, return_value=supports_per_head),
+    ):
+        if should_succeed:
+            backend = get_attn_backend(
+                head_size=128,
+                dtype=torch.float16,
+                kv_cache_dtype="fp8",
+                block_size=64,
+                use_per_head_quant_scales=True,
+            )
+            assert backend.get_name() == backend_name
+        else:
+            with pytest.raises(ValueError) as exc_info:
+                get_attn_backend(
+                    head_size=128,
+                    dtype=torch.float16,
+                    kv_cache_dtype="fp8",
+                    block_size=64,
+                    use_per_head_quant_scales=True,
+                )
+            assert backend_name in str(exc_info.value)
