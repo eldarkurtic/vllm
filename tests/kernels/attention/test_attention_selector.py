@@ -294,37 +294,30 @@ def test_invalid_backend():
 
 
 @pytest.mark.parametrize(
-    "backend_name,supports_per_head,should_succeed",
+    "backend_name,flash_attn_version,should_succeed",
     [
-        ("FLASH_ATTN", True, True),  # FA3 supports per-head quant scales
-        ("FLASH_ATTN", False, False),  # FA2 does not support per-head quant scales
-        ("FLASHINFER", False, False),  # FlashInfer does not support
-        ("FLEX_ATTENTION", False, False),  # Flex does not support
+        ("FLASH_ATTN", 3, True),  # FA3 supports per-head quant scales
+        ("FLASH_ATTN", 2, False),  # FA2 does not support per-head quant scales
+        ("FLASHINFER", None, False),  # FlashInfer does not support
+        ("FLEX_ATTENTION", None, False),  # Flex does not support
     ],
 )
 def test_per_head_quant_scales_backend_selection(
-    backend_name: str, supports_per_head: bool, should_succeed: bool
+    backend_name: str, flash_attn_version: int | None, should_succeed: bool
 ):
     """Test backend selection when use_per_head_quant_scales=True."""
     # Clear cache to ensure fresh backend selection
     _cached_get_attn_backend.cache_clear()
 
-    attention_config = AttentionConfig(backend=AttentionBackendEnum[backend_name])
+    attention_config = AttentionConfig(
+        backend=AttentionBackendEnum[backend_name],
+        flash_attn_version=flash_attn_version,
+    )
     vllm_config = VllmConfig(attention_config=attention_config)
 
-    # Get the backend class to patch
-    prefix = "vllm.v1.attention.backends"
-    backend_module = {
-        "FLASH_ATTN": f"{prefix}.flash_attn.FlashAttentionBackend",
-        "FLASHINFER": f"{prefix}.flashinfer.FlashInferBackend",
-        "FLEX_ATTENTION": f"{prefix}.flex_attention.FlexAttentionBackend",
-    }[backend_name]
-
-    supports_attr = f"{backend_module}.supports_per_head_quant_scales"
     with (
         set_current_vllm_config(vllm_config),
         patch("vllm.platforms.current_platform", CudaPlatform()),
-        patch(supports_attr, return_value=supports_per_head),
     ):
         if should_succeed:
             backend = get_attn_backend(
@@ -334,6 +327,7 @@ def test_per_head_quant_scales_backend_selection(
                 block_size=64,
                 use_per_head_quant_scales=True,
             )
+            print(f"ELDAR SUCCEED = backend.get_name() = {backend.get_name()}")
             assert backend.get_name() == backend_name
         else:
             with pytest.raises(ValueError) as exc_info:
@@ -344,4 +338,5 @@ def test_per_head_quant_scales_backend_selection(
                     block_size=64,
                     use_per_head_quant_scales=True,
                 )
+            print(f"exc_info.value = {exc_info.value}")
             assert backend_name in str(exc_info.value)
