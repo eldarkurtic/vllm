@@ -327,7 +327,6 @@ def test_per_head_quant_scales_backend_selection(
                 block_size=64,
                 use_per_head_quant_scales=True,
             )
-            print(f"ELDAR SUCCEED = backend.get_name() = {backend.get_name()}")
             assert backend.get_name() == backend_name
         else:
             with pytest.raises(ValueError) as exc_info:
@@ -338,5 +337,4 @@ def test_per_head_quant_scales_backend_selection(
                     block_size=64,
                     use_per_head_quant_scales=True,
                 )
-            print(f"exc_info.value = {exc_info.value}")
             assert backend_name in str(exc_info.value)
